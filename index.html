@@ -2,84 +2,102 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Location Logger</title>
+  <title>Shared Location Logger</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 2em; max-width: 600px; }
+    body { font-family: Arial; margin: 2em; max-width: 600px; }
     input, button { padding: 10px; margin-top: 10px; width: 100%; box-sizing: border-box; }
     .log-entry { border: 1px solid #ccc; padding: 10px; margin-top: 10px; border-radius: 5px; }
-    label { font-weight: bold; margin-top: 10px; display: block; }
-    #visitorCounter { margin-top: 20px; font-size: 1.1em; color: #333; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>🌍 Community Location Logger</h1>
-
+  <h1>🌍 Shared Location Logger</h1>
   <button onclick="logLocation()">📍 Log My GPS Location</button>
 
   <label for="manualTown">Or enter your nearest town and country manually:</label>
   <input type="text" id="manualTown" placeholder="Town, Country" />
   <button onclick="logManualLocation()">✏️ Log Manual Location</button>
 
-  <div id="visitorCounter"></div>
-
   <h2>🔎 Logged Locations</h2>
   <div id="log"></div>
 
+  <!-- Firebase Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-database-compat.js"></script>
+
   <script>
-    // Session-based visitor counter
-    let visitCount = sessionStorage.getItem('visitCount') || 0;
-    visitCount++;
-    sessionStorage.setItem('visitCount', visitCount);
-    document.getElementById('visitorCounter').innerText = `You are visitor #${visitCount} in this session.`;
+    // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
-    // Log GPS-based location
-    async function logLocation() {
-      if (!navigator.geolocation) {
-        alert("Geolocation is not supported by your browser.");
-        return;
-      }
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDkSW30gss6X9VImGleD7pQ8liALQYV5_8",
+  authDomain: "geolog-afbaa.firebaseapp.com",
+  databaseURL: "https://geolog-afbaa-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "geolog-afbaa",
+  storageBucket: "geolog-afbaa.firebasestorage.app",
+  messagingSenderId: "691304528074",
+  appId: "1:691304528074:web:ca09eb269df947e6f85c33"
+};
 
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
-          const data = await response.json();
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
-          const town = data.address.town || data.address.city || data.address.village || data.address.hamlet || "Unknown Town";
-          const country = data.address.country || "Unknown Country";
-
-          addToLog(town + ", " + country, latitude, longitude);
-        } catch (error) {
-          alert("Unable to fetch town details. Try again later.");
-          console.error(error);
-        }
-      }, (error) => {
-        alert("Geolocation error: " + error.message);
+    function addToLog(locationText, lat, lon) {
+      const timestamp = new Date().toISOString();
+      db.ref("logs").push({
+        location: locationText,
+        latitude: lat,
+        longitude: lon,
+        timestamp: timestamp
       });
     }
 
-    // Log manually entered location
-    function logManualLocation() {
-      const manualInput = document.getElementById('manualTown').value.trim();
-      if (manualInput === "") {
-        alert("Please enter a town and country.");
+    function logLocation() {
+      if (!navigator.geolocation) {
+        alert("Geolocation not supported.");
         return;
       }
-      addToLog(manualInput, "N/A", "N/A");
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const data = await response.json();
+          const town = data.address.town || data.address.city || data.address.village || "Unknown Town";
+          const country = data.address.country || "Unknown Country";
+          addToLog(`${town}, ${country}`, latitude, longitude);
+        } catch {
+          alert("Could not fetch town info.");
+        }
+      });
+    }
+
+    function logManualLocation() {
+      const input = document.getElementById('manualTown').value.trim();
+      if (!input) {
+        alert("Please enter town and country.");
+        return;
+      }
+      addToLog(input, "N/A", "N/A");
       document.getElementById('manualTown').value = "";
     }
 
-    // Append log entry
-    function addToLog(locationText, lat, lon) {
-      const logEntry = document.createElement("div");
-      logEntry.className = "log-entry";
-      logEntry.innerHTML = `
-        <strong>Location:</strong> ${locationText}<br>
-        <strong>Coordinates:</strong> ${lat}, ${lon}<br>
-        <small>Logged at ${new Date().toLocaleTimeString()}</small>
+    function displayLogEntry(data) {
+      const entry = data.val();
+      const div = document.createElement("div");
+      div.className = "log-entry";
+      div.innerHTML = `
+        <strong>Location:</strong> ${entry.location}<br>
+        <strong>Coordinates:</strong> ${entry.latitude}, ${entry.longitude}<br>
+        <small>Logged at: ${new Date(entry.timestamp).toLocaleString()}</small>
       `;
-      document.getElementById("log").prepend(logEntry);
+      document.getElementById("log").prepend(div);
     }
+
+    db.ref("logs").limitToLast(50).on("child_added", displayLogEntry);
   </script>
 </body>
 </html>
