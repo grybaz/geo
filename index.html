@@ -8,7 +8,6 @@
     input, button { padding: 10px; margin-top: 10px; width: 100%; box-sizing: border-box; }
     .log-entry { border: 1px solid #ccc; padding: 10px; margin-top: 10px; border-radius: 5px; }
     label { display: block; margin-top: 10px; font-weight: bold; }
-    img.flag { vertical-align: middle; margin-left: 8px; width: 24px; height: 18px; border-radius: 2px; }
   </style>
 </head>
 <body>
@@ -40,13 +39,12 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    function addToLog(locationText, lat, lon, countryCode = null) {
+    function addToLog(locationText, lat, lon) {
       const timestamp = new Date().toISOString();
       db.ref("logs").push({
         location: locationText,
         latitude: lat,
         longitude: lon,
-        countryCode: countryCode,
         timestamp: timestamp
       });
     }
@@ -65,9 +63,8 @@
 
           const town = data.address.town || data.address.city || data.address.village || "Unknown Town";
           const country = data.address.country || "Unknown Country";
-          const countryCode = data.address.country_code?.toLowerCase() || null;
 
-          addToLog(`${town}, ${country}`, latitude, longitude, countryCode);
+          addToLog(`${town}, ${country}`, latitude, longitude);
         } catch (error) {
           alert("Could not fetch town info.");
           console.error(error);
@@ -81,20 +78,16 @@
         alert("Please enter town and country.");
         return;
       }
-      addToLog(input, "N/A", "N/A", null);
+      addToLog(input, "N/A", "N/A");
       document.getElementById('manualTown').value = "";
     }
 
     function displayLogEntry(data) {
       const entry = data.val();
-      const flagImg = entry.countryCode
-        ? `<img src="https://flagcdn.com/24x18/${entry.countryCode}.png" class="flag" alt="Flag" onerror="this.style.display='none'">`
-        : '';
-
       const div = document.createElement("div");
       div.className = "log-entry";
       div.innerHTML = `
-        <strong>Location:</strong> ${entry.location} ${flagImg}<br>
+        <strong>Location:</strong> ${entry.location}<br>
         <strong>Coordinates:</strong> ${entry.latitude}, ${entry.longitude}<br>
         <small>Logged at: ${new Date(entry.timestamp).toLocaleString()}</small>
       `;
