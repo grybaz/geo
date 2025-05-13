@@ -41,14 +41,15 @@
     const db = firebase.database();
 
     // ✅ Add new log entry
-    function addToLog(locationText, lat, lon) {
-      const timestamp = new Date().toISOString();
-      db.ref("logs").push({
-        location: locationText,
-        latitude: lat,
-        longitude: lon,
-        timestamp: timestamp
-      });
+    function addToLog(locationText, lat, lon, countryCode = null) {
+  const timestamp = new Date().toISOString();
+  db.ref("logs").push({
+    location: locationText,
+    latitude: lat,
+    longitude: lon,
+    countryCode: countryCode,
+    timestamp: timestamp
+  });
     }
 
     // ✅ GPS location logging
