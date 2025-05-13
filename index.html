@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Location Logger</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; max-width: 600px; }
+    input, button { padding: 10px; margin-top: 10px; width: 100%; box-sizing: border-box; }
+    .log-entry { border: 1px solid #ccc; padding: 10px; margin-top: 10px; border-radius: 5px; }
+    label { font-weight: bold; margin-top: 10px; display: block; }
+    #visitorCounter { margin-top: 20px; font-size: 1.1em; color: #333; }
+  </style>
+</head>
+<body>
+  <h1>🌍 Community Location Logger</h1>
+
+  <button onclick="logLocation()">📍 Log My GPS Location</button>
+
+  <label for="manualTown">Or enter your nearest town and country manually:</label>
+  <input type="text" id="manualTown" placeholder="Town, Country" />
+  <button onclick="logManualLocation()">✏️ Log Manual Location</button>
+
+  <div id="visitorCounter"></div>
+
+  <h2>🔎 Logged Locations</h2>
+  <div id="log"></div>
+
+  <script>
+    // Session-based visitor counter
+    let visitCount = sessionStorage.getItem('visitCount') || 0;
+    visitCount++;
+    sessionStorage.setItem('visitCount', visitCount);
+    document.getElementById('visitorCounter').innerText = `You are visitor #${visitCount} in this session.`;
+
+    // Log GPS-based location
+    async function logLocation() {
+      if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const data = await response.json();
+
+          const town = data.address.town || data.address.city || data.address.village || data.address.hamlet || "Unknown Town";
+          const country = data.address.country || "Unknown Country";
+
+          addToLog(town + ", " + country, latitude, longitude);
+        } catch (error) {
+          alert("Unable to fetch town details. Try again later.");
+          console.error(error);
+        }
+      }, (error) => {
+        alert("Geolocation error: " + error.message);
+      });
+    }
+
+    // Log manually entered location
+    function logManualLocation() {
+      const manualInput = document.getElementById('manualTown').value.trim();
+      if (manualInput === "") {
+        alert("Please enter a town and country.");
+        return;
+      }
+      addToLog(manualInput, "N/A", "N/A");
+      document.getElementById('manualTown').value = "";
+    }
+
+    // Append log entry
+    function addToLog(locationText, lat, lon) {
+      const logEntry = document.createElement("div");
+      logEntry.className = "log-entry";
+      logEntry.innerHTML = `
+        <strong>Location:</strong> ${locationText}<br>
+        <strong>Coordinates:</strong> ${lat}, ${lon}<br>
+        <small>Logged at ${new Date().toLocaleTimeString()}</small>
+      `;
+      document.getElementById("log").prepend(logEntry);
+    }
+  </script>
+</body>
+</html>
