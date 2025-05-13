@@ -8,10 +8,13 @@
     input, button { padding: 10px; margin-top: 10px; width: 100%; box-sizing: border-box; }
     .log-entry { border: 1px solid #ccc; padding: 10px; margin-top: 10px; border-radius: 5px; }
     label { display: block; margin-top: 10px; font-weight: bold; }
+    #visitorCount { margin: 10px 0; font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>🌍 Shared Location Logger</h1>
+  <div id="visitorCount">Loading visitor count...</div>
+
   <button onclick="logLocation()">📍 Log My GPS Location</button>
 
   <label for="manualTown">Or enter your nearest town and country manually:</label>
@@ -39,6 +42,21 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // ✅ Visitor Counter with localStorage Protection
+    const visitorRef = db.ref("siteStats/visits");
+    const hasVisited = localStorage.getItem("hasVisitedLogger");
+
+    if (!hasVisited) {
+      visitorRef.transaction(current => (current || 0) + 1);
+      localStorage.setItem("hasVisitedLogger", "true");
+    }
+
+    visitorRef.on("value", snapshot => {
+      const count = snapshot.val() || 0;
+      document.getElementById("visitorCount").innerText = `👥 Total Visitors: ${count}`;
+    });
+
+    // ✅ Add new log
     function addToLog(locationText, lat, lon) {
       const timestamp = new Date().toISOString();
       db.ref("logs").push({
@@ -49,6 +67,7 @@
       });
     }
 
+    // ✅ GPS location
     function logLocation() {
       if (!navigator.geolocation) {
         alert("Geolocation not supported.");
@@ -72,6 +91,7 @@
       });
     }
 
+    // ✅ Manual input
     function logManualLocation() {
       const input = document.getElementById('manualTown').value.trim();
       if (!input) {
@@ -82,6 +102,7 @@
       document.getElementById('manualTown').value = "";
     }
 
+    // ✅ Display logs
     function displayLogEntry(data) {
       const entry = data.val();
       const div = document.createElement("div");
