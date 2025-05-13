@@ -8,12 +8,13 @@
     input, button { padding: 10px; margin-top: 10px; width: 100%; box-sizing: border-box; }
     .log-entry { border: 1px solid #ccc; padding: 10px; margin-top: 10px; border-radius: 5px; }
     label { display: block; margin-top: 10px; font-weight: bold; }
-    #visitorCount { margin: 10px 0; font-weight: bold; }
+    #visitorCount, #distanceCount { margin: 10px 0; font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>🌍 Shared Location Logger</h1>
   <div id="visitorCount">Loading visitor count...</div>
+  <div id="distanceCount">Loading total distance...</div>
 
   <button onclick="logLocation()">📍 Log My GPS Location</button>
 
@@ -42,67 +43,76 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // ✅ Visitor Counter with localStorage Protection
+    // Visitor Counter with localStorage Protection
     const visitorRef = db.ref("siteStats/visits");
     const hasVisited = localStorage.getItem("hasVisitedLogger");
-
     if (!hasVisited) {
       visitorRef.transaction(current => (current || 0) + 1);
       localStorage.setItem("hasVisitedLogger", "true");
     }
-
     visitorRef.on("value", snapshot => {
       const count = snapshot.val() || 0;
       document.getElementById("visitorCount").innerText = `👥 Total Visitors: ${count}`;
     });
 
-    // ✅ Add new log
-    function addToLog(locationText, lat, lon) {
+    const distanceRef = db.ref("siteStats/totalDistanceKm");
+    distanceRef.on("value", snapshot => {
+      const km = snapshot.val() || 0;
+      document.getElementById("distanceCount").innerText = `🚶‍♂️ Total Distance Travelled: ${km.toFixed(2)} km`;
+    });
+
+    async function addToLog(locationText, lat, lon) {
       const timestamp = new Date().toISOString();
-      db.ref("logs").push({
-        location: locationText,
-        latitude: lat,
-        longitude: lon,
-        timestamp: timestamp
-      });
+      const logData = { location: locationText, latitude: lat, longitude: lon, timestamp };
+      const logsRef = db.ref("logs");
+
+      // Get last valid coordinate
+      const snapshot = await logsRef.orderByKey().limitToLast(1).once("value");
+      const last = Object.values(snapshot.val() || {})[0];
+
+      if (last && isFinite(last.latitude) && isFinite(last.longitude)) {
+        const dist = haversine(parseFloat(last.latitude), parseFloat(last.longitude), lat, lon);
+        db.ref("siteStats/totalDistanceKm").transaction(current => (current || 0) + dist);
+      }
+
+      logsRef.push(logData);
     }
 
-    // ✅ GPS location
     function logLocation() {
       if (!navigator.geolocation) {
         alert("Geolocation not supported.");
         return;
       }
-
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const { latitude, longitude } = pos.coords;
         try {
           const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`);
           const data = await response.json();
-
           const town = data.address.town || data.address.city || data.address.village || "Unknown Town";
           const country = data.address.country || "Unknown Country";
-
           addToLog(`${town}, ${country}`, latitude, longitude);
-        } catch (error) {
-          alert("Could not fetch town info.");
-          console.error(error);
+        } catch (err) {
+          alert("Could not fetch location info.");
         }
       });
     }
 
-    // ✅ Manual input
-    function logManualLocation() {
-      const input = document.getElementById('manualTown').value.trim();
-      if (!input) {
-        alert("Please enter town and country.");
-        return;
+    async function logManualLocation() {
+      const input = document.getElementById("manualTown").value.trim();
+      if (!input) return alert("Please enter a town/country");
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(input)}&format=json&limit=1`);
+        const data = await response.json();
+        if (data.length === 0) return alert("Could not geocode location.");
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        addToLog(input, lat, lon);
+        document.getElementById("manualTown").value = "";
+      } catch (err) {
+        alert("Failed to geocode town.");
       }
-      addToLog(input, "N/A", "N/A");
-      document.getElementById('manualTown').value = "";
     }
 
-    // ✅ Display logs
     function displayLogEntry(data) {
       const entry = data.val();
       const div = document.createElement("div");
@@ -113,6 +123,17 @@
         <small>Logged at: ${new Date(entry.timestamp).toLocaleString()}</small>
       `;
       document.getElementById("log").prepend(div);
+    }
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
     }
 
     db.ref("logs").limitToLast(50).on("child_added", displayLogEntry);
